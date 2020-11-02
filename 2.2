@@ -1,0 +1,120 @@
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.integrate import solve_ivp
+
+class Car:
+
+    def __init__(self, length=2.3, velocity=5, x=0, y=0, pose=0):
+        self.__velocity = velocity
+        self.__length = length
+        self.__x = x
+        self.__y = y
+        self.__pose = pose
+
+    def move(self, steering_angle, dt):
+    # Simulate the motion (trajectory) of the car
+    # from time t=0, to time t=0+dt starting from
+    # z_initial = [self.x, self.y, self.pose]
+
+        def bicycle_model(t, z):
+            theta = z[2]
+            return [self.__velocity * np.cos(theta),
+                    self.__velocity * np.sin(theta),
+                    self.__velocity * np.tan(steering_angle+1. * np.pi /180.) / self.__length]
+
+        z_initial = [self.__x, self.__y, self.__pose]
+        solution = solve_ivp(bicycle_model,
+                             [0, dt],
+                             z_initial)
+        self.__x = solution.y[0][-1]
+        self.__y = solution.y[1][-1]
+        self.__pose = solution.y[2][-1]
+
+    def x(self):
+        return self.__x
+
+    def y(self):
+        return self.__y
+
+    def pose(self):
+        return self.__pose
+
+    def length(self):
+        return self.__length
+
+class PIDControler:
+
+    def __init__(self, kp, ki, kd, ts):
+        """
+        Constructor for PIDController
+        :param kp: proportional gain
+        :param ki: integral gain
+        :param kd: derivative gain
+        :param ts: sampling time
+        """
+        self.__kp = kp
+        self.__kd = kd / ts
+        self.__ki = ki * ts
+        self.__ts = ts
+        self.__previous_error = None
+        self.__sum_errors = 0.
+
+    def control(self, y, y_set_point=0):
+        error = y_set_point - y
+        control_action = self.__kp * error
+        if self.__previous_error is not None:
+            control_action += self.__kd * (error - self.__previous_error)
+        self.__previous_error = error
+        return control_action
+
+# -----------------------------------------------
+t_sampling = 0.025
+
+pid1 = PIDControler(kp=0.4, ki=0.0, kd=0.4, ts=t_sampling)
+murphy = Car(x=0, y=0, pose=0)
+
+y_cache1 = np.array([murphy.y()])
+x_cache1 = np.array([murphy.x()])
+
+num_points = 2000
+for k in range(num_points):
+    control_action = pid1.control(y=murphy.y())
+    murphy.move(control_action, t_sampling)
+    y_cache1 = np.append(y_cache1, murphy.y())
+    x_cache1 = np.append(x_cache1, murphy.x())
+
+pid2 = PIDControler(kp=0.4, ki=0.0, kd=0.8, ts=t_sampling)
+car2 = Car(x=0, y=0, pose=0)
+
+y_cache2 = np.array([car2.y()])
+x_cache2 = np.array([car2.x()])
+
+num_points = 2000
+for k in range(num_points):
+    control_action = pid2.control(y=car2.y())
+    car2.move(control_action, t_sampling)
+    y_cache2 = np.append(y_cache2, car2.y())
+    x_cache2 = np.append(x_cache2, car2.x())
+
+pid3 = PIDControler(kp=0.4, ki=0.0, kd=1.2, ts=t_sampling)
+car3 = Car(x=0, y=0, pose=0)
+
+y_cache3 = np.array([car3.y()])
+x_cache3 = np.array([car3.x()])
+
+num_points = 2000
+for k in range(num_points):
+    control_action = pid3.control(y=car3.y())
+    car3.move(control_action, t_sampling)
+    y_cache3 = np.append(y_cache3, car3.y())
+    x_cache3 = np.append(x_cache3, car3.x())
+
+# t_sampling * [0, 1, 2, 3, 4, ..., 2000]
+t_span = t_sampling * np.arange(num_points + 1)
+plt.plot(x_cache1, y_cache1, 'r')
+plt.plot(x_cache2, y_cache2, 'b')
+plt.plot(x_cache3, y_cache3, 'g')
+plt.xlabel('x(m)')
+plt.ylabel('y(m)')
+plt.grid()
+plt.show()
