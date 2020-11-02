@@ -1,0 +1,92 @@
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.integrate import solve_ivp
+
+class Car:
+
+    def __init__(self, length=2.3, velocity=5, x=0, y=0, pose=0):
+        self.__velocity = velocity
+        self.__length = length
+        self.__x = x
+        self.__y = y
+        self.__pose = pose
+
+    def move(self, steering_angle, dt):
+    # Simulate the motion (trajectory) of the car
+    # from time t=0, to time t=0+dt starting from
+    # z_initial = [self.x, self.y, self.pose]
+
+        def bicycle_model(t, z):
+            theta = z[2]
+            return [self.__velocity * np.cos(theta),
+                    self.__velocity * np.sin(theta),
+                    self.__velocity * np.tan(steering_angle+1. * np.pi /180.) / self.__length]
+
+        z_initial = [self.__x, self.__y, self.__pose]
+        solution = solve_ivp(bicycle_model,
+                             [0, dt],
+                             z_initial)
+        self.__x = solution.y[0][-1]
+        self.__y = solution.y[1][-1]
+        self.__pose = solution.y[2][-1]
+
+    def x(self):
+        return self.__x
+
+    def y(self):
+        return self.__y
+
+    def pose(self):
+        return self.__pose
+
+    def length(self):
+        return self.__length
+
+class PIDControler:
+
+    def __init__(self, kp, ki, kd, ts):
+        """
+        Constructor for PIDController
+        :param kp: proportional gain
+        :param ki: integral gain
+        :param kd: derivative gain
+        :param ts: sampling time
+        """
+        self.__kp = kp
+        self.__kd = kd / ts
+        self.__ki = ki * ts
+        self.__ts = ts
+        self.__previous_error = None
+        self.__sum_errors = 0.
+
+    def control(self, y, y_set_point=0):
+        error = y_set_point - y
+        control_action = self.__kp * error
+        if self.__previous_error is not None:
+            control_action += self.__kd * (error - self.__previous_error)
+
+        control_action += self.__ki * self.__sum_errors
+
+        self.__sum_errors += error
+        self.__previous_error = error
+        return control_action
+
+# -----------------------------------------------
+t_sampling = 0.025
+
+pid1 = PIDControler(kp=1.2, ki=0.2, kd=0.2, ts=t_sampling)
+murphy = Car(x=0, y=0, pose=0)
+u_cache = np.array(pid1.control)
+
+num_points = 2000
+for k in range(num_points):
+    control_action = pid1.control(y=murphy.y())
+    murphy.move(control_action, t_sampling)
+
+# t_sampling * [0, 1, 2, 3, 4, ..., 2000]
+t_span = t_sampling * np.arange(num_points + 1)
+plt.plot(t_sampling, u_cache)
+plt.xlabel('time(s)')
+plt.ylabel('u(t)(°)')
+plt.grid()
+plt.show()
